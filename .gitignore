@@ -1,0 +1,52 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.cursor/
+.cursor
+# Job runtime output (keep the folder)
+backend/data/jobs/*
+!backend/data/jobs/.gitkeep
+
+# Generated overlays (keep committed static assets)
+*.png
+!backend/static/**
+
+# Large sample floor plans (not source)
+floor-plans-pdf/
+*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~

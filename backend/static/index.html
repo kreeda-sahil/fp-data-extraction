@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Floor Plan Analyser</title>
+  <style>
+    :root { font-family: Segoe UI, system-ui, sans-serif; color: #1b1b1b; }
+    body { margin: 0; background: #f4f1ea; }
+    header { background: #2c3d33; color: #f4f1ea; padding: 1.2rem 1.5rem; }
+    header p { margin: 0.35rem 0 0; opacity: 0.85; font-size: 0.95rem; }
+    main { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+    .card { background: #fff; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 1rem; }
+    .drop { border: 2px dashed #8aa08c; border-radius: 8px; padding: 1.5rem; text-align: center; background: #faf8f3; }
+    button { background: #2c3d33; color: #fff; border: 0; padding: 0.55rem 1rem; border-radius: 6px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status { margin-top: 0.75rem; min-height: 1.2rem; }
+    img { max-width: 100%; border: 1px solid #ddd; }
+    pre { max-height: 420px; overflow: auto; background: #1b1b1b; color: #e8e4d9; padding: 0.75rem; font-size: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 800px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Floor Plan Analyser</h1>
+    <p>Upload a CAD floor-plan PDF. This POC extracts rooms, scale, doors, windows, and keepouts for furniture placement.</p>
+  </header>
+  <main>
+    <div class="card">
+      <div class="drop">
+        <input id="file" type="file" accept="application/pdf" />
+        <p>PDF only. First page is analysed. Existing furniture is ignored.</p>
+        <button id="run">Analyse</button>
+        <div id="status"></div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="card">
+        <h2>Overlay</h2>
+        <img id="overlay" alt="Overlay will appear here" />
+      </div>
+      <div class="card">
+        <h2>JSON <a id="download" href="#" download="analysis.json">download</a></h2>
+        <pre id="json">{}</pre>
+      </div>
+    </div>
+  </main>
+  <script>
+    const fileInput = document.getElementById("file");
+    const status = document.getElementById("status");
+    document.getElementById("run").onclick = async () => {
+      if (!fileInput.files.length) {
+        status.textContent = "Choose a PDF first.";
+        return;
+      }
+      const form = new FormData();
+      form.append("file", fileInput.files[0]);
+      status.textContent = "Analysing… this can take a minute with gpt-4o.";
+      const res = await fetch("/api/analyze", { method: "POST", body: form });
+      if (!res.ok) {
+        status.textContent = "Error: " + (await res.text());
+        return;
+      }
+      const data = await res.json();
+      document.getElementById("json").textContent = JSON.stringify(data, null, 2);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      document.getElementById("download").href = URL.createObjectURL(blob);
+      document.getElementById("overlay").src = data.overlay_url + "?t=" + Date.now();
+      status.textContent = "Rooms: " + data.rooms.length + ", openings: " + data.openings.length +
+        ", keepouts: " + data.keepouts.length + (data.vision_used ? " (gpt-4o)" : " (vector only)");
+    };
+  </script>
+</body>
+</html>
