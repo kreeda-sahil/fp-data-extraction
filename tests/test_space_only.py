@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from app.pipeline.geom_util import polygon_from_rect_pt
 from app.pipeline.geometry import room_rects_from_labels
 from app.pipeline.pdf_load import LoadedPage, TextSpan
-from app.schemas import AnalysisResult, Opening, PageInfo, Room, ScaleInfo
-from app.pipeline.geom_util import polygon_from_rect_pt
+from app.schemas import (
+    AnalysisResult,
+    OpeningWithKeepouts,
+    PageInfo,
+    RoomNested,
+    ScaleInfo,
+    UsageInfo,
+    WallWithOpenings,
+)
 
 
 def _span(text: str, x: float, y: float) -> TextSpan:
@@ -53,29 +61,37 @@ def test_choure_like_labels_drop_furniture() -> None:
 def test_serialized_result_has_no_furniture_tokens() -> None:
     """POC-2 JSON must not mention existing furniture names."""
     mm = 2.0
+    opening = OpeningWithKeepouts(
+        id="opening_1",
+        type="window",
+        blocks_tall_furniture=True,
+        leaf_polygon=polygon_from_rect_pt(0, 0, 10, 2, mm),
+        keepouts=[],
+    )
     result = AnalysisResult(
         job_id="test",
         scale=ScaleInfo(mm_per_pdf_point=mm, method="test", sample_count=1),
         page=PageInfo(width_pt=100, height_pt=100, width_mm=200, height_mm=200),
         rooms=[
-            Room(
+            RoomNested(
                 id="room_1",
                 name_raw="KITCHEN",
                 name_normalized="Kitchen",
                 polygon=polygon_from_rect_pt(0, 0, 40, 30, mm),
                 adjacent_room_ids=["room_2"],
+                walls=[
+                    WallWithOpenings(
+                        id="wall_1",
+                        polygon=polygon_from_rect_pt(0, 0, 40, 2, mm),
+                        room_ids=["room_1"],
+                        openings=[opening],
+                    )
+                ],
             )
         ],
-        openings=[
-            Opening(
-                id="opening_1",
-                type="window",
-                blocks_tall_furniture=True,
-                leaf_polygon=polygon_from_rect_pt(0, 0, 10, 2, mm),
-            )
-        ],
+        usage=UsageInfo(vision_called=False),
     )
     dumped = result.model_dump_json().upper()
     for token in ("SOFA", "TV UNIT", "WARDROBE", "FRIDGE", "3 SEATER"):
         assert token not in dumped
-    assert result.openings[0].blocks_tall_furniture is True
+    assert result.rooms[0].walls[0].openings[0].blocks_tall_furniture is True

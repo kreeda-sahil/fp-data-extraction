@@ -1,4 +1,4 @@
-"""Orchestrate load → scale → geometry → vision → keepouts → overlay."""
+"""Orchestrate load → scale → geometry → vision → keepouts → nest → overlay."""
 
 from __future__ import annotations
 
@@ -6,17 +6,19 @@ from pathlib import Path
 
 from app.catalog_spaces import is_furniture_caption, normalize_space_name
 from app.config import RASTER_DPI, SKIP_VISION
+from app.pipeline.cost import empty_usage
 from app.pipeline.geometry import (
     assign_adjacency,
     build_rooms_walls_openings,
     recompute_opening_rooms,
 )
 from app.pipeline.keepouts import build_keepouts
+from app.pipeline.nest import nest_rooms
 from app.pipeline.overlay import render_overlay
 from app.pipeline.pdf_load import load_pdf
 from app.pipeline.scale import recover_scale
 from app.pipeline.vision import apply_vision
-from app.schemas import AnalysisResult, PageInfo, WarningItem
+from app.schemas import AnalysisResult, PageInfo, UsageInfo, WarningItem
 
 
 def analyze_pdf_bytes(
@@ -36,8 +38,9 @@ def analyze_pdf_bytes(
     rooms, walls, openings, candidates = build_rooms_walls_openings(page, mm, warnings)
 
     vision_used = False
+    usage: UsageInfo = empty_usage(vision_called=False)
     if use_vision:
-        rooms, openings, vision_used = apply_vision(
+        rooms, openings, vision_used, usage = apply_vision(
             page, rooms, openings, candidates, mm, warnings
         )
 
@@ -54,7 +57,12 @@ def analyze_pdf_bytes(
     assign_adjacency(rooms, openings)
 
     keepouts = build_keepouts(rooms, openings, mm)
-    result = AnalysisResult(
+    flat_walls = walls[:250]
+    overlay = render_overlay(page, rooms, openings, keepouts, scale)
+    overlay.save(job_dir / "overlay.png", "PNG")
+
+    nested_rooms = nest_rooms(rooms, flat_walls, openings, keepouts)
+    return AnalysisResult(
         job_id=job_id,
         scale=scale,
         page=PageInfo(
@@ -64,14 +72,9 @@ def analyze_pdf_bytes(
             height_mm=page.height_pt * mm,
             rotation=page.rotation,
         ),
-        rooms=rooms,
-        walls=walls[:250],
-        openings=openings,
-        keepouts=keepouts,
+        rooms=nested_rooms,
         warnings=warnings,
         overlay_url=f"/api/jobs/{job_id}/overlay.png",
         vision_used=vision_used,
+        usage=usage,
     )
-    overlay = render_overlay(page, result)
-    overlay.save(job_dir / "overlay.png", "PNG")
-    return result

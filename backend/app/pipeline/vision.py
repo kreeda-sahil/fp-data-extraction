@@ -11,6 +11,7 @@ from PIL import Image
 
 from app.catalog_spaces import CANONICAL_SPACES, is_furniture_caption, normalize_space_name
 from app.config import OPENAI_API_KEY, OPENAI_MODEL, VISION_MAX_EDGE
+from app.pipeline.cost import empty_usage, usage_from_openai_response
 from app.pipeline.geom_util import polygon_from_rect_pt
 from app.pipeline.geometry import (
     OpeningCandidate,
@@ -20,7 +21,7 @@ from app.pipeline.geometry import (
 )
 from app.pipeline.pdf_load import LoadedPage
 from app.pipeline.scale import is_room_callout, parse_size_pair
-from app.schemas import Opening, Room, WarningItem
+from app.schemas import Opening, Room, UsageInfo, WarningItem
 
 
 def _resize_for_vision(image: Image.Image, max_edge: int = VISION_MAX_EDGE) -> Image.Image:
@@ -83,11 +84,11 @@ def apply_vision(
     candidates: list[OpeningCandidate],
     mm_per_pt: float,
     warnings: list[WarningItem],
-) -> tuple[list[Room], list[Opening], bool]:
+) -> tuple[list[Room], list[Opening], bool, UsageInfo]:
     """Call gpt-4o to label catalog spaces and classify openings."""
     if page.raster is None:
         warnings.append(WarningItem(code="vision_skipped", message="No raster for vision."))
-        return rooms, openings, False
+        return rooms, openings, False, empty_usage(vision_called=False)
     if not OPENAI_API_KEY:
         warnings.append(
             WarningItem(
@@ -95,7 +96,7 @@ def apply_vision(
                 message="OPENAI_API_KEY is not set; returning vector-only labels.",
             )
         )
-        return rooms, openings, False
+        return rooms, openings, False, empty_usage(vision_called=False)
 
     summary = {
         "canonical_spaces": list(CANONICAL_SPACES),
@@ -157,11 +158,12 @@ def apply_vision(
         )
         content = response.choices[0].message.content or "{}"
         payload = json.loads(content)
+        usage = usage_from_openai_response(response, vision_called=True)
     except Exception as exc:  # noqa: BLE001 — POC must not 500 on LLM errors
         warnings.append(
             WarningItem(code="vision_failed", message=f"gpt-4o call failed: {exc}")
         )
-        return rooms, openings, False
+        return rooms, openings, False, empty_usage(vision_called=False)
 
     rooms = _replace_rooms_from_vision(page, rooms, payload.get("rooms") or [], mm_per_pt)
     openings = _merge_opening_labels(openings, payload.get("openings") or [])
@@ -172,7 +174,7 @@ def apply_vision(
         if is_furniture_caption(text):
             continue
         warnings.append(WarningItem(code="vision_note", message=text))
-    return rooms, openings, True
+    return rooms, openings, True, usage
 
 
 def _replace_rooms_from_vision(

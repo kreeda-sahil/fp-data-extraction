@@ -28,6 +28,7 @@ htmlcov/
 .tox/
 .cursor/
 .cursor
+
 # Job runtime output (keep the folder)
 backend/data/jobs/*
 !backend/data/jobs/.gitkeep

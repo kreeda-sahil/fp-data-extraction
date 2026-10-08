@@ -47,7 +47,7 @@ class PageInfo(BaseModel):
 
 
 class Room(BaseModel):
-    """A labeled occupiable space."""
+    """A labeled occupiable space (flat, used during extraction)."""
 
     id: str
     name_raw: str
@@ -95,6 +95,37 @@ class Keepout(BaseModel):
     opening_id: str | None = None
 
 
+class OpeningWithKeepouts(Opening):
+    """Opening with its keepouts nested underneath."""
+
+    keepouts: list[Keepout] = Field(default_factory=list)
+
+
+class WallWithOpenings(BaseModel):
+    """Wall segment with openings that sit on it."""
+
+    id: str
+    polygon: Polygon
+    room_ids: list[str] = Field(default_factory=list)
+    openings: list[OpeningWithKeepouts] = Field(default_factory=list)
+
+
+class RoomNested(BaseModel):
+    """Room-by-room export: coordinates, then walls → openings → keepouts."""
+
+    id: str
+    name_raw: str
+    name_normalized: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    adjacent_room_ids: list[str] = Field(default_factory=list)
+    polygon: Polygon
+    width_mm: float | None = None
+    depth_mm: float | None = None
+    labeled_size: str | None = None
+    confidence: float = 0.5
+    walls: list[WallWithOpenings] = Field(default_factory=list)
+
+
 class WarningItem(BaseModel):
     """Non-fatal extraction issue."""
 
@@ -102,18 +133,29 @@ class WarningItem(BaseModel):
     message: str
 
 
+class UsageInfo(BaseModel):
+    """OpenAI token usage and estimated cost for the vision call."""
+
+    model: str = "gpt-4o"
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float = 0.0
+    cost_inr: float = 0.0
+    fx_usd_to_inr: float = 96.78
+    vision_called: bool = False
+
+
 class AnalysisResult(BaseModel):
-    """Placement-ready floor-plan extraction."""
+    """Placement-ready floor-plan extraction (room-nested)."""
 
     job_id: str
     units: Literal["mm"] = "mm"
     coordinate_system: str = "page_top_left_y_down"
     scale: ScaleInfo
     page: PageInfo
-    rooms: list[Room] = Field(default_factory=list)
-    walls: list[Wall] = Field(default_factory=list)
-    openings: list[Opening] = Field(default_factory=list)
-    keepouts: list[Keepout] = Field(default_factory=list)
+    rooms: list[RoomNested] = Field(default_factory=list)
     warnings: list[WarningItem] = Field(default_factory=list)
     overlay_url: str | None = None
     vision_used: bool = False
+    usage: UsageInfo = Field(default_factory=UsageInfo)

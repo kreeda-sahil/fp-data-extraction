@@ -23,7 +23,6 @@ def test_poddar_extracts_rooms_and_door_keepout(tmp_path: Path, monkeypatch: pyt
     assert result.page.width_pt > 0
     assert result.scale.mm_per_pdf_point > 0
     names = " ".join(r.name_raw.upper() for r in result.rooms)
-    # Text-rich sheet should attach at least one real space label.
     assert result.rooms, "expected interior room polygons"
     assert any(
         token in names
@@ -34,8 +33,20 @@ def test_poddar_extracts_rooms_and_door_keepout(tmp_path: Path, monkeypatch: pyt
         assert token not in dumped
     assert all(r.name_normalized for r in result.rooms)
     assert all(r.adjacent_room_ids is not None for r in result.rooms)
+    assert all(hasattr(r, "walls") for r in result.rooms)
+    assert result.usage.vision_called is False
+    assert result.usage.cost_usd == 0.0
     assert (job_dir / "overlay.png").exists()
-    if result.openings:
-        assert result.keepouts, "openings should produce keepouts"
-        assert any(k.reason in {"door_swing", "window_clearance", "circulation"} for k in result.keepouts)
-        assert all(o.blocks_tall_furniture for o in result.openings if o.type == "window")
+
+    openings = [o for room in result.rooms for wall in room.walls for o in wall.openings]
+    keepouts = [
+        k
+        for room in result.rooms
+        for wall in room.walls
+        for o in wall.openings
+        for k in o.keepouts
+    ]
+    if openings:
+        assert keepouts, "openings should produce keepouts"
+        assert any(k.reason in {"door_swing", "window_clearance", "circulation"} for k in keepouts)
+        assert all(o.blocks_tall_furniture for o in openings if o.type == "window")

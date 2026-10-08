@@ -67,8 +67,26 @@
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       document.getElementById("download").href = URL.createObjectURL(blob);
       document.getElementById("overlay").src = data.overlay_url + "?t=" + Date.now();
-      status.textContent = "Rooms: " + data.rooms.length + ", openings: " + data.openings.length +
-        ", keepouts: " + data.keepouts.length + (data.vision_used ? " (gpt-4o)" : " (vector only)");
+      let openings = 0, keepouts = 0;
+      for (const room of data.rooms || []) {
+        for (const wall of room.walls || []) {
+          for (const opening of wall.openings || []) {
+            openings += 1;
+            keepouts += (opening.keepouts || []).length;
+          }
+        }
+      }
+      const usage = data.usage || {};
+      const cost = usage.vision_called
+        ? (" | tokens " + (usage.total_tokens || 0) +
+           " | $" + (usage.cost_usd || 0) +
+           " / ₹" + (usage.cost_inr || 0))
+        : " | no vision cost";
+      status.textContent = "Rooms: " + data.rooms.length +
+        ", openings: " + openings +
+        ", keepouts: " + keepouts +
+        (data.vision_used ? " (gpt-4o)" : " (vector only)") +
+        cost;
     };
   </script>
 </body>

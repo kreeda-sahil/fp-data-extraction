@@ -5,7 +5,7 @@ from __future__ import annotations
 from PIL import Image, ImageDraw, ImageFont
 
 from app.pipeline.pdf_load import LoadedPage
-from app.schemas import AnalysisResult, Keepout, Room
+from app.schemas import Keepout, Opening, Room, ScaleInfo
 
 
 _KEEP_COLORS = {
@@ -15,7 +15,13 @@ _KEEP_COLORS = {
 }
 
 
-def render_overlay(page: LoadedPage, result: AnalysisResult) -> Image.Image:
+def render_overlay(
+    page: LoadedPage,
+    rooms: list[Room],
+    openings: list[Opening],
+    keepouts: list[Keepout],
+    scale: ScaleInfo,
+) -> Image.Image:
     """Draw extraction QA graphics on a copy of the page raster."""
     base = page.raster.copy().convert("RGBA") if page.raster is not None else Image.new(
         "RGBA", (int(page.width_pt), int(page.height_pt)), (255, 255, 255, 255)
@@ -33,7 +39,7 @@ def render_overlay(page: LoadedPage, result: AnalysisResult) -> Image.Image:
         (200, 180, 90, 70),
         (180, 110, 140, 70),
     ]
-    for i, room in enumerate(result.rooms):
+    for i, room in enumerate(rooms):
         color = palette[i % len(palette)]
         pts = _to_px(room, sx, sy)
         if len(pts) >= 3:
@@ -43,26 +49,30 @@ def render_overlay(page: LoadedPage, result: AnalysisResult) -> Image.Image:
             label = room.name_normalized or room.name_raw
             draw.text((cx - 20, cy - 6), label[:40], fill=(10, 10, 10, 255), font=font)
 
-    for keepout in result.keepouts:
+    for keepout in keepouts:
         color = _KEEP_COLORS.get(keepout.reason, (80, 80, 80, 80))
         pts = _keepout_px(keepout, sx, sy)
         if len(pts) >= 3:
             draw.polygon(pts, fill=color, outline=color[:3] + (230,))
 
-    for opening in result.openings:
+    for opening in openings:
         if not opening.leaf_polygon:
             continue
         pts = [
             (p.x * sx, p.y * sy) for p in opening.leaf_polygon.points_pdf[:-1]
         ]
-        outline = (180, 20, 20, 255) if opening.type in {"door", "sliding_door"} else (20, 60, 180, 255)
+        outline = (
+            (180, 20, 20, 255)
+            if opening.type in {"door", "sliding_door"}
+            else (20, 60, 180, 255)
+        )
         if len(pts) >= 2:
             draw.line(pts + [pts[0]], fill=outline, width=2)
 
     scale_badge = (
-        f"scale {result.scale.mm_per_pdf_point:.4f} mm/pt"
-        f" samples={result.scale.sample_count}"
-        f"{' FLAGGED' if result.scale.flagged else ''}"
+        f"scale {scale.mm_per_pdf_point:.4f} mm/pt"
+        f" samples={scale.sample_count}"
+        f"{' FLAGGED' if scale.flagged else ''}"
     )
     draw.rectangle((8, 8, 8 + 7 * len(scale_badge), 24), fill=(255, 255, 255, 200))
     draw.text((12, 10), scale_badge, fill=(0, 0, 0, 255), font=font)

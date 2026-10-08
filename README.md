@@ -2,7 +2,11 @@
 
 Hybrid extractor: CAD vectors for geometry, dimension labels for scale, **OpenAI `gpt-4o`** for room names and opening semantics.
 
-This service does **not** place furniture. It returns JSON the furniture-placement POC can consume (rooms, millimetre polygons, door-swing / window keepouts). Existing furniture on furnished PDFs is ignored.
+This service does **not** place furniture. It returns **room-by-room** JSON for the furniture-placement POC:
+
+`rooms[] → walls[] → openings[] → keepouts[]`
+
+plus scale/page metadata and OpenAI `usage` (input/output tokens, cost USD and INR at `FX_USD_TO_INR`, default 96.78). Existing furniture on furnished PDFs is ignored.
 
 ## Setup
 
